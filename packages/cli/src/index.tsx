@@ -21,7 +21,10 @@ function App() {
   );
 }
 
-const renderer = await createCliRenderer();
+const renderer = await createCliRenderer({
+  targetFps: 60,
+  exitOnCtrlC: false,
+});
 createRoot(renderer).render(<App />);
 
 // https://www.youtube.com/watch?v=k_D_C3ExypU

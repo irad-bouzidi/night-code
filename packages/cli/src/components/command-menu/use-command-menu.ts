@@ -6,7 +6,7 @@ import { useKeyboard } from "@opentui/react";
 
 type UseCommandMenuReturn = {
   showCommandMenu: boolean;
-  commandQuert: string;
+  commandQuery: string;
   selectedIndex: number;
   scrollRef: RefObject<ScrollBoxRenderable | null>;
   handleContentChange: (text: string) => void;
@@ -76,11 +76,30 @@ export function useCommandMenu(): UseCommandMenuReturn {
     } else if (key.name === "down") {
       key.preventDefault();
       setSelectedIndex((i: number) => {
-        if (filteredCommands.length === 0) return 0;
+        if (filteredCommands.length === 0) {
+          return 0;
+        }
 
         const newIndex = Math.min(filteredCommands.length - 1, i + 1);
         const sb = scrollRef.current;
+        if (sb) {
+          const viewportHeight = sb.viewport.height;
+          const visibleEnd = sb.scrollTop + viewportHeight - 1;
+          if (newIndex > visibleEnd) {
+            sb.scrollTo(newIndex - viewportHeight + 1);
+          }
+        }
+        return newIndex;
       });
     }
   });
+  return {
+    showCommandMenu,
+    commandQuery,
+    selectedIndex,
+    scrollRef,
+    handleContentChange,
+    resolveCommand,
+    setSelectedIndex,
+  };
 }
