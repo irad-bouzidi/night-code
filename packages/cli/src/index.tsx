@@ -28,4 +28,4 @@ const renderer = await createCliRenderer({
 createRoot(renderer).render(<App />);
 
 // https://www.youtube.com/watch?v=k_D_C3ExypU
-// 52min00sec
+// 1h13min00sec
