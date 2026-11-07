@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { useKeyboard } from "@opentui/react";
-import { type ModeType, type SupportedChatModelId } from "@nightcode/shared";
+import { type ModeType } from "@nightcode/shared";
 import type { InferResponseType } from "hono/client";
 import { SessionShell } from "../components/session-shell";
 import { 
@@ -26,7 +26,7 @@ const sessionLocationSchema = z.object({
     .object({
       message: z.string(),
       mode: z.custom<ModeType>(),
-      model: z.custom<SupportedChatModelId>(),
+      model: z.string(),
     })
     .optional(),
 });
@@ -61,7 +61,7 @@ function SessionChat({
   initialPrompt,
 }: { 
   session: SessionData,
-  initialPrompt?: { message: string; mode: ModeType; model: SupportedChatModelId };
+  initialPrompt?: { message: string; mode: ModeType; model: string };
 }) {
   const [initialMessages] = useState(() => session.messages as unknown as Message[]);
   const { mode, model } = usePromptConfig();

@@ -1,6 +1,6 @@
 import type { DialogContextValue } from "../../providers/dialog";
 import type { ToastContextValue } from "../../providers/toast";
-import type { ModeType, SupportedChatModelId } from "@nightcode/shared";
+import type { ModeType } from "@nightcode/shared";
 
 export type CommandContext = {
   exit: () => void;
@@ -9,7 +9,10 @@ export type CommandContext = {
   navigate: (path: string) => void;
   mode: ModeType;
   setMode: (mode: ModeType) => void;
-  setModel: (model: SupportedChatModelId) => void;
+  provider: string;
+  setProvider: (provider: string) => void;
+  model: string;
+  setModel: (model: string) => void;
 };
 
 export type Command = {

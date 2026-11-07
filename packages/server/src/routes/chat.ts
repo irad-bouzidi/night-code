@@ -19,10 +19,7 @@ import {
 } from "@nightcode/shared";
 import { buildSystemPrompt } from "../system-prompt";
 import type { AuthenticatedEnv } from "../middleware/require-auth";
-import { requireCreditsBalance } from "../middleware/require-credits-balance";
-import { calculateCreditsForUsage } from "../lib/credits";
-import { ingestAiUsage } from "../lib/polar";
-import { isSupportedChatModel, resolveChatModel } from "../lib/models";
+import { getProviderContext, isAvailableModel, resolveChatModel } from "../lib/models";
 
 type ChatMessageMetadata = {
   mode?: ModeType;
@@ -43,7 +40,7 @@ const submitSchema = z.object({
     )
     .min(1),
   mode: modeSchema,
-  model: z.string().refine(isSupportedChatModel, "Unsupported model"),
+  model: z.string().min(1),
 });
 
 const submitValidator = zValidator("json", submitSchema, (result, c) => {
@@ -66,7 +63,6 @@ function hasPendingToolCalls(message: NightcodeUIMessage) {
 const app = new Hono<AuthenticatedEnv>()
   .post(
     "/",
-    requireCreditsBalance,
     submitValidator,
     async (c) => {
       const userId = c.get("userId");
@@ -80,9 +76,23 @@ const app = new Hono<AuthenticatedEnv>()
         return c.json({ error: "Session not found" }, 404);
       }
 
+      const providerResult = getProviderContext((name) => c.req.header(name));
+      if (!providerResult.ok) {
+        return c.json({ error: providerResult.error }, 400);
+      }
+      const providerContext = providerResult.context;
+
+      if (!providerContext.apiKey) {
+        return c.json({ error: `No API key set for ${providerContext.provider.name}. Run /provider to add one.` }, 400);
+      }
+
+      if (!(await isAvailableModel(providerContext, model))) {
+        return c.json({ error: `Model "${model}" is not available from ${providerContext.provider.name}. Pick one with /models.` }, 400);
+      }
+
       const startTime = Date.now();
       const tools = getToolContracts(mode);
-      const resolvedModel = resolveChatModel(model);
+      const resolvedModel = resolveChatModel(providerContext, model);
       const previousMessages = Array.isArray(session.messages)
         ? (session.messages as unknown as NightcodeUIMessage[])
         : [];
@@ -111,11 +121,10 @@ const app = new Hono<AuthenticatedEnv>()
       let completedUsage: LanguageModelUsage | null = null;
 
       const result = streamText({
-        model: resolvedModel.model,
+        model: resolvedModel,
         system: buildSystemPrompt({ mode }),
         messages: modelMessages,
         tools,
-        providerOptions: resolvedModel.providerOptions,
         onFinish(event) {
           completedUsage = event.totalUsage;
         },
@@ -148,29 +157,6 @@ const app = new Hono<AuthenticatedEnv>()
               messages: event.messages as unknown as Prisma.InputJsonValue,
             },
           });
-
-          if (!completedUsage) return;
-
-          try {
-            const billableUsage = calculateCreditsForUsage({
-              provider: resolvedModel.provider,
-              model: resolvedModel.modelId,
-              usage: completedUsage,
-            });
-
-            await ingestAiUsage({
-              externalCustomerId: userId,
-              eventId: `chat-message:${event.responseMessage.id}`,
-              credits: billableUsage.credits,
-            });
-          } catch (error) {
-            console.error("Failed to ingest Polar AI usage for chat message", {
-              error,
-              sessionId: id,
-              messageId: event.responseMessage.id,
-              userId,
-            });
-          }
         },
         onError(error) {
           return error instanceof Error ? error.message : String(error);
