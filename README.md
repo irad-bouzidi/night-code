@@ -18,7 +18,6 @@
   <a href="https://cwa.run/hono?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=badge_hono"><img src="https://img.shields.io/badge/Hono-E36002?style=for-the-badge&logo=hono&logoColor=white" alt="Hono" /></a>&nbsp;
   <a href="https://cwa.run/neon?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=badge_neon"><img src="https://img.shields.io/badge/Neon-00E599?style=for-the-badge&logo=neon&logoColor=black" alt="Neon" /></a>&nbsp;
   <a href="https://cwa.run/clerk?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=badge_clerk"><img src="https://img.shields.io/badge/Clerk-6C47FF?style=for-the-badge&logo=clerk&logoColor=white" alt="Clerk" /></a>&nbsp;
-  <a href="https://cwa.run/polar?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=badge_polar"><img src="https://img.shields.io/badge/Polar-000000?style=for-the-badge&logo=polar&logoColor=white" alt="Polar" /></a>&nbsp;
   <a href="https://cwa.run/coderabbit?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=badge_coderabbit"><img src="https://img.shields.io/badge/CodeRabbit-FF6C37?style=for-the-badge&logo=rabbitmq&logoColor=white" alt="CodeRabbit" /></a>&nbsp;
   <a href="https://cwa.run/sentry?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=badge_sentry"><img src="https://img.shields.io/badge/Sentry-362D59?style=for-the-badge&logo=sentry&logoColor=white" alt="Sentry" /></a>&nbsp;
   <a href="https://cwa.run/railway?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=badge_railway"><img src="https://img.shields.io/badge/Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white" alt="Railway" /></a>
@@ -57,10 +56,9 @@ git checkout 07-tool-calling  # example: jump to tool calling
 - **Plan and Build Modes** - Use read-only planning tools or enable write, edit, and shell execution tools for implementation
 - **Streaming Responses** - Stream model output through the AI SDK with persisted session history
 - **Local Project Tools** - Read files, list directories, glob, grep, write files, edit files, and run shell commands inside the current project
-- **Multi-Model Support** - Use supported Anthropic and OpenAI chat models from a shared model registry
+- **Bring Your Own Key** - Pick OpenRouter or Ollama Cloud with `/provider`, paste your API key once, and choose from every model the provider offers with `/models`
 - **Persistent Sessions** - Store authenticated user sessions and messages in Postgres via Prisma
 - **Clerk OAuth** - Authenticate the CLI through a browser-based Clerk OAuth flow
-- **Usage Billing** - Meter AI usage as credits through Polar before allowing session and chat actions
 
 ## Getting Started
 
@@ -69,8 +67,7 @@ git checkout 07-tool-calling  # example: jump to tool calling
 - [Bun](https://cwa.run/bun?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=prerequisites_bun) installed
 - PostgreSQL database, such as [Neon](https://cwa.run/neon?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=prerequisites_neon)
 - [Clerk](https://cwa.run/clerk?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=prerequisites_clerk) application configured for OAuth
-- Anthropic and/or OpenAI API key
-- [Polar](https://cwa.run/polar?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=prerequisites_polar) account and credits meter
+- An [OpenRouter](https://openrouter.ai) or [Ollama Cloud](https://ollama.com) API key (added from inside the CLI)
 
 ### 1. Clone and install
 
@@ -92,20 +89,12 @@ Fill in the required values:
 API_URL=http://localhost:3000
 DATABASE_URL=
 
-ANTHROPIC_API_KEY=
-OPENAI_API_KEY=
-
 CLERK_FRONTEND_API=
 CLERK_OAUTH_CLIENT_SECRET=
 CLERK_OAUTH_CLIENT_ID=
 CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 JWT_SECRET=jwt-secret
-
-POLAR_ACCESS_TOKEN=
-POLAR_PRODUCT_ID=
-POLAR_SERVER=sandbox
-POLAR_CREDITS_METER_ID=
 ```
 
 ### 3. Set up Clerk OAuth
@@ -135,46 +124,19 @@ Copy the generated application credentials into `.env`:
 | `CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
 | `CLERK_SECRET_KEY` | Clerk secret key |
 
-### 4. Set up Polar billing
+### 4. Pick an AI provider (in the CLI)
 
-NightCode uses Polar credits to gate new work and bill completed AI usage. The server checks the user's active meter balance before creating sessions or sending chat requests, then ingests usage events after AI responses finish.
+AI keys are not configured on the server. Each user brings their own, in the CLI:
 
-In your [Polar](https://cwa.run/polar?utm_source=github&utm_medium=readme&utm_campaign=nightcode&utm_content=setup_polar) dashboard, use sandbox mode for local development and create a meter with these exact settings:
+1. Run `/provider` and pick **OpenRouter** or **Ollama Cloud**.
+2. Paste your API key ([OpenRouter keys](https://openrouter.ai/settings/keys), [Ollama keys](https://ollama.com/settings/keys)) and press enter. The key is hidden while you type.
+3. Run `/models` to search and pick from every model that provider offers.
 
-| Setting | Value |
-|---------|-------|
-| Meter name | `nightcode_credits` |
-| Filter | Name equals `nightcode_usage` |
-| Aggregation | Sum |
-| Aggregation property | `credits` |
+Picking a provider that already has a key lets you use it, replace the key, or delete it. Keys are stored in `~/.nightcode/credentials.json` (mode `0600`) and the active provider and last model per provider in `~/.nightcode/config.json`. The CLI sends the active provider and key with each request (`x-nightcode-provider` and `x-nightcode-provider-key` headers), and the server uses them for that request only and never stores them.
 
-The event name and metadata key must match exactly. The server sends usage events like this:
+The model list comes from the provider's own `GET /models` endpoint (cached for 10 minutes). Only models that support tool calling are shown when the provider reports capabilities (OpenRouter via `supported_parameters`, Ollama via `/api/tags`), because the agent relies on tools.
 
-```ts
-{
-  name: "nightcode_usage",
-  metadata: { credits }
-}
-```
-
-Next, create a meter credits benefit and attach it to a one-time purchase product:
-
-1. Create a benefit using the `nightcode_credits` meter.
-2. Set the credited units, for example `1000` credits.
-3. Create a one-time purchase product, for example `$20` for `1000` credits.
-4. Attach the credits benefit to that product.
-5. Set the customer portal visibility to private so purchases happen through API-generated checkout links.
-
-Then copy the required Polar values into `.env`:
-
-| Environment variable | Where to find it |
-|----------------------|------------------|
-| `POLAR_ACCESS_TOKEN` | Polar developer settings token |
-| `POLAR_PRODUCT_ID` | Product ID from the credits product |
-| `POLAR_SERVER` | Use `sandbox` locally, `production` for live billing |
-| `POLAR_CREDITS_METER_ID` | Meter ID from the meter URL |
-
-The CLI upgrade flow calls `/billing/checkout`, which opens a Polar checkout URL. The usage flow calls `/billing/portal`, which opens the customer's Polar portal.
+To add another OpenAI-compatible provider, add an entry to `AI_PROVIDERS` in `packages/shared/src/providers.ts`.
 
 ### 5. Set up the database
 
@@ -223,8 +185,8 @@ packages/
 │       ├── providers/           # Dialog, keyboard, prompt, theme, toast providers
 │       └── screens/             # Home, new session, and session screens
 ├── database/                    # Prisma schema, generated client, database exports
-├── server/                      # Hono API for auth, billing, sessions, and chat
-└── shared/                      # Shared schemas, tool contracts, and model registry
+├── server/                      # Hono API for auth, models, sessions, and chat
+└── shared/                      # Shared schemas and tool contracts
 ```
 
 ## Scripts
@@ -242,6 +204,6 @@ packages/
 | Package | Description |
 |---------|-------------|
 | `@nightcode/cli` | Terminal UI and client-side tool execution |
-| `@nightcode/server` | Hono API, AI streaming, auth checks, and billing ingestion |
+| `@nightcode/server` | Hono API, AI streaming, and auth checks |
 | `@nightcode/database` | Prisma client and database schema |
-| `@nightcode/shared` | Shared Zod schemas, AI tool contracts, and model definitions |
+| `@nightcode/shared` | Shared Zod schemas and AI tool contracts |

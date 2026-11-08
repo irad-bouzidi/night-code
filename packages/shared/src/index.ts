@@ -1,14 +1,4 @@
 export {
-  SUPPORTED_CHAT_MODELS,
-  DEFAULT_CHAT_MODEL_ID,
-  findSupportedChatModel,
-  type ModelPricing,
-  type SupportedProvider,
-  type SupportedChatModel,
-  type SupportedChatModelId,
-} from "./models";
-
-export {
   Mode,
   modeSchema,
   toolInputSchemas,
@@ -16,3 +6,12 @@ export {
   type ToolContracts,
   type ModeType,
 } from "./schemas";
+
+export {
+  AI_PROVIDERS,
+  findAiProvider,
+  PROVIDER_HEADER,
+  PROVIDER_KEY_HEADER,
+  type AiProvider,
+  type AiProviderId,
+} from "./providers";
